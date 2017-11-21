@@ -10,12 +10,11 @@
 #include <fcntl.h>
 
 const int SUCCESS=0,BADARGMTS=1,ERROR=2;
+int image = -1; //Image file descriptor, initially invalid
 
-int superblock_summary(int image){
+int superblock_summary(){
   //The superblock is always located at byte offset 1024 from the beginning of the file
   int offset = 1024;
-  
-  
 
 int totBlocks;// total number of blocks (decimal)
 int totInodes;// total number of i-nodes (decimal)
@@ -28,19 +27,19 @@ int non// first non-reserved i-node (decimal)
 fprintf(stdout, "%d,%d,%d,%d,%d,%d,%d,%d\n", );
 }
 
-int group_summary(int image){
+int group_summary(){
 }
 
-int freeblock_summary(int image){
+int freeblock_summary(){
 }
 
-int freeinode_summary(int image){
+int freeinode_summary(){
 }
 
-int inode_summary(int image){
+int inode_summary(){
 }
 
-int directory_entry(int image){
+int directory_entry(){
   /*
   For each directory I-node, scan every data block. For each valid (non-zero I-node number) directory entry, produce a new-line terminated line, with seven comma-separated fields (no white space).
 
@@ -54,7 +53,7 @@ int directory_entry(int image){
   */  
 }
 
-int indirectblock_references(int image){
+int indirectblock_references(){
   /*The I-node summary contains a list of all 12 blocks, and the primary single, double, and triple indirect blocks.
     We also need to know about the blocks that are pointed to by those indirect blocks. For each file or directory I-node, scan the single indirect blocks and (recursively) the double and triple indirect blocks.
     For each non-zero block pointer you find, produce a new-line terminated line with six comma-separated fields (no white space).
@@ -88,26 +87,26 @@ int main (int argc, char *argv[]) {
     exit(BADARGMTS);
   }
 
-  int imageFile = open(argv[1],O_RDONLY); //attempt to open image file
-  if (imageFile==-1) {
+  image = open(argv[1],O_RDONLY); //attempt to open image file
+  if (image == -1) {
     perror("image file error");
     exit(BADARGMTS);
   }
 
 
-superblock_summary(int image);
+superblock_summary();
 
-group_summary(int image);
+group_summary();
 
-freeblock_summary(int image);
+freeblock_summary();
 
-freeinode_summary(imageFile);
+freeinode_summary();
 
-inode_summary(imageFile);
+inode_summary();
 
-directory_entry(imageFile);
+directory_entry();
 
-indirectblock_references(imageFile);
+indirectblock_references();
 
 return(SUCCESS);
 }
