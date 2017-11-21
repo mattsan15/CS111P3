@@ -12,7 +12,7 @@
 const int SUCCESS=0,BADARGMTS=1,ERROR=2;
 int image = -1; //Image file descriptor, initially invalid
 
-int superblock_summary(){
+void superblock_summary(){
   //The superblock is always located at byte offset 1024 from the beginning of the file
   int offset = 1024;
 
@@ -22,24 +22,30 @@ int blockSize;// block size (in bytes, decimal)
 int inodeSize;// i-node size (in bytes, decimal)
 int blocksPerGroup;// blocks per group (decimal)
 int inodesPerGroup;// i-nodes per group (decimal)
-int non// first non-reserved i-node (decimal)
+ int non; // first non-reserved i-node (decimal)
 
-fprintf(stdout, "%d,%d,%d,%d,%d,%d,%d,%d\n", );
+  uint32_t buf;
+  
+  pread(image, &buf, 4, offset + 4);
+ totBlocks = buf;
+
+ fprintf(stdout, "%d", totBlocks);
+ //fprintf(stdout, "%d,%d,%d,%d,%d,%d,%d,%d\n", );
 }
 
-int group_summary(){
+void group_summary(){
 }
 
-int freeblock_summary(){
+void freeblock_summary(){
 }
 
-int freeinode_summary(){
+void freeinode_summary(){
 }
 
-int inode_summary(){
+void inode_summary(){
 }
 
-int directory_entry(){
+void directory_entry(){
   /*
   For each directory I-node, scan every data block. For each valid (non-zero I-node number) directory entry, produce a new-line terminated line, with seven comma-separated fields (no white space).
 
@@ -53,7 +59,7 @@ int directory_entry(){
   */  
 }
 
-int indirectblock_references(){
+void indirectblock_references(){
   /*The I-node summary contains a list of all 12 blocks, and the primary single, double, and triple indirect blocks.
     We also need to know about the blocks that are pointed to by those indirect blocks. For each file or directory I-node, scan the single indirect blocks and (recursively) the double and triple indirect blocks.
     For each non-zero block pointer you find, produce a new-line terminated line with six comma-separated fields (no white space).
@@ -95,7 +101,7 @@ int main (int argc, char *argv[]) {
 
 
 superblock_summary();
-
+/*
 group_summary();
 
 freeblock_summary();
@@ -107,6 +113,6 @@ inode_summary();
 directory_entry();
 
 indirectblock_references();
-
+*/
 return(SUCCESS);
 }
