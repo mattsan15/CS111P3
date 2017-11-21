@@ -28,7 +28,7 @@ int inodesPerGroup;// i-nodes per group (decimal)
   
   pread(image, &buf, 4, offset + 4);
  totBlocks = buf;
-
+ // This prints out stuff!!!
  fprintf(stdout, "%d", totBlocks);
  //fprintf(stdout, "%d,%d,%d,%d,%d,%d,%d,%d\n", );
 }
