@@ -13,27 +13,74 @@ const int SUCCESS=0,BADARGMTS=1,ERROR=2;
 int image = -1; //Image file descriptor, initially invalid
 
 void superblock_summary(){
-  //The superblock is always located at byte offset 1024 from the beginning of the file
-  int offset = 1024;
 
-int totBlocks;// total number of blocks (decimal)
-int totInodes;// total number of i-nodes (decimal)
-int blockSize;// block size (in bytes, decimal)
-int inodeSize;// i-node size (in bytes, decimal)
-int blocksPerGroup;// blocks per group (decimal)
-int inodesPerGroup;// i-nodes per group (decimal)
- int non; // first non-reserved i-node (decimal)
+ //The superblock is always located at byte offset 1024 from the beginning of the file                                                                                                                      
+ int offset = 1024;
+
+ int totBlocks;// total number of blocks (decimal)                                                                                                                                                          
+ int totInodes;// total number of i-nodes (decimal)                                                                                                                                                         
+ int blockSize;// block size (in bytes, decimal)                                                                                                                                                            
+ int inodeSize;// i-node size (in bytes, decimal)                                                                                                                                                           
+ int blocksPerGroup;// blocks per group (decimal)                                                                                                                                                           
+ int inodesPerGroup;// i-nodes per group (decimal)                                                                                                                                                          
+ int non; // first non-reserved i-node (decimal)                                                                                                                                                            
 
   uint32_t buf;
-  
-  pread(image, &buf, 4, offset + 4);
+  uint16_t buf2; // for inodeSize                                                                                                                                                                           
+
+  // total number of blocks (decimal)                                                                                                                                                                       
+ pread(image, &buf, 4, offset + 4);
  totBlocks = buf;
- // This prints out stuff!!!
- fprintf(stdout, "%d", totBlocks);
- //fprintf(stdout, "%d,%d,%d,%d,%d,%d,%d,%d\n", );
+
+ // total number of i-nodes (decimal)                                                                                                                                                                       
+ pread(image, &buf, 4, offset + 0);
+ totInodes = buf;
+
+ // block size (in bytes, decimal)                                                                                                                                                                          
+ pread(image, &buf, 4, offset + 24);
+ blockSize = 1024 << buf;
+
+ // i-node size (in bytes, decimal)                                                                                                                                                                         
+ pread(image, &buf2, 2, offset + 88);
+ inodeSize = buf2;
+
+ // blocks per group (decimal)                                                                                                                                                                              
+ pread(image, &buf, 4, offset + 32);
+ blocksPerGroup = buf;
+
+ // i-nodes per group (decimal)                                                                                                                                                                             
+ pread(image, &buf, 4, offset + 40);
+ inodesPerGroup = buf;
+
+ // first non-reserved i-node (decimal)                                                                                                                                                                     
+ pread(image, &buf, 4, offset + 84);
+ non = buf;
+ // Print out for CSV                                                                                                                                                                                       
+ fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d\n", "SUPERBLOCK", totBlocks, totInodes, blockSize, inodeSize,
+         blocksPerGroup, inodesPerGroup, non);
 }
 
 void group_summary(){
+  //Scan each of the groups in the file system. For each group, produce a new-line terminated line for each group, 
+  //each comprised of nine comma-separated fields (with no white space), summarizing its contents.
+
+  int groupNumber;// group number (decimal, starting from zero)
+  int blocksInGroup; // total number of blocks in this group (decimal)
+  int inodesInGroup;// total number of i-nodes in this group (decimal)
+  int numFreeBlocks;// number of free blocks (decimal)
+  int numFreeInodes;// number of free i-nodes (decimal)
+  int numFreeBmap;// block number of free block bitmap for this group (decimal)
+  int numFreeImap// block number of free i-node bitmap for this group (decimal)
+  int numOfFirstBlock// block number of first block of i-nodes in this group (decimal)
+  // Note that most Berkeley-derived file systms (like EXT2) support both blocks and fragments, which may have different sizes. The block is the preferred unit of allocation. But in some cases, fragments may be used (to reduce internal fragmentation loss). Block addresses and the free block list entries are based on the fragment size, rather than the block size. But, in the images we give you, the block and fragment sizes will be the same.
+
+// One of the major features included EXT2 file systems is support for multiple cylinder groups:
+
+// all cylinder groups but the last have the same number of blocks and I-nodes; the last has the residue (e.g. blocks/fs modulo blocks/group).
+// each group, in addition to its group summary, also (for redundancy) starts with a copy of the file system superblock.
+// But, in the images we give you, there will be only a single group
+  fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","GROUP",groupNumber,blocksInGroup,inodesInGroup,numFreeBlocks,
+      numFreeInodes,numFreeBmap,numFreeImap);
 }
 
 void freeblock_summary(){
