@@ -82,9 +82,6 @@ void group_summary(){
   pread(image, &buf32, 4, superblockOffset + 4);
   blocksInGroup = buf32;
   
-  pread(image, &buf32, 4, superblockOffset + 40);
-  inodesInGroup = buf32;
-  
   pread(image, &buf16, 2, groupOffset + 12);
   numFreeBlocks = buf16;
   
@@ -100,19 +97,71 @@ void group_summary(){
   pread(image, &buf32, 4, groupOffset + 8);
   numOfFirstBlock = buf32;
   
-  fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","GROUP",groupNumber,blocksInGroup,inodesInGroup,numFreeBlocks,
+  fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","GROUP",groupNumber,blocksInGroup,inodesPerGroup,numFreeBlocks,
           numFreeInodes,numBmap,numImap,numOfFirstBlock);
 }
 
 void freeblock_summary(){
-
+  // Go through the block bitmap byte by byte                                                                                                                                                               
+  for(int i = 0; i < blockSize; i++){
+    // Get the byte                                                                                                                                                                                       
+    pread(image, &buf8, 1, (numBmap * blockSize) + i);
+    int8_t getBit = 1;
+    // Go through the byte bit by bit                                                                                                                                                                     
+    for(int j = 1; j <= 8; j++){
+      // See if the bit is set.                                                                                                                                                                         
+      int checkAllocation = buf8 & getBit;
+      // If it's not, then it's free and print it out.                                                                                                                                                  
+      if (checkAllocation == 0)
+        fprintf(stdout, "%s,%d\n", "BFREE", i * 8 + j);
+      // Move on to the next bit.                                                                                                                                                                       
+      getBit = getBit << 1;
+    }
+  }
 }
 
 void freeinode_summary(){
-
+  // Go through the inode bitmap byte by byte                                                                                                                                                               
+  for(int i = 0; i < blockSize; i++){
+    // Get the byte                                                                                                                                                                                       
+    pread(image, &buf8, 1, (numImap * blockSize) + i);
+    int8_t getBit = 1;
+    // Go through the byte bit by bit                                                                                                                                                                     
+    for(int j = 1; j <= 8; j++){
+      // See if the bit is set.                                                                                                                                                                         
+      int checkAllocation = buf8 & getBit;
+      // If it's not, then it's free and print it out.                                                                                                                                                  
+      if (checkAllocation == 0)
+        fprintf(stdout, "%s,%d\n", "IFREE", i * 8 + j);
+      // Move on to the next bit.                                                                                                                                                                       
+      getBit = getBit << 1;
+    }
+  }
 }
 
 void inode_summary(){
+
+  /*
+  //Scan the I-nodes for each group. For each allocated (non-zero mode and non-zero link count) I-node, 
+  produce a new-line terminated line, with 27 comma-separated fields (with no white space). The first twelve fields are
+  i-node attributes:
+
+  int numInode; //inode number (decimal)
+  char fileType; //file type ('f' for file, 'd' for directory, 's' for symbolic link, '?" for anything else)
+  mode (low order 12-bits, octal ... suggested format "0%o")
+  owner (decimal)
+  group (decimal)
+  link count (decimal)
+  time of last I-node change (mm/dd/yy hh:mm:ss, GMT)
+  modification time (mm/dd/yy hh:mm:ss, GMT)
+  time of last access (mm/dd/yy hh:mm:ss, GMT)
+  file size (decimal)
+  number of blocks (decimal)
+  
+  The next fifteen fields are block addresses (decimal, 12 direct, one indirect, one double indirect, one triple indirect).
+  */
+  //fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","INODE",groupNumber,blocksInGroup,inodesPerGroup,numFreeBlocks,
+  //        numFreeInodes,numBmap,numImap,numOfFirstBlock);
 }
 
 void directory_entry(){
@@ -169,7 +218,6 @@ int main (int argc, char *argv[]) {
     exit(BADARGMTS);
   }
 
-
 superblock_summary();
 
 group_summary();
@@ -177,9 +225,9 @@ group_summary();
 freeblock_summary();
 
 freeinode_summary();
-/*
-inode_summary();
 
+inode_summary();
+/*
 directory_entry();
 
 indirectblock_references();
