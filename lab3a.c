@@ -11,104 +11,105 @@
 
 const int SUCCESS=0,BADARGMTS=1,ERROR=2;
 int image = -1; //Image file descriptor, initially invalid
-int numGroups=1; //Only one single group in the file system
+
+/*      Global Offsets                   */
+const int numGroups=1; //Only one single group in the file system
+int superblockOffset = 1024;  //The superblock is always located at byte offset 1024 from the beginning of the file
+int groupOffset = 1024+1024; //Offset of Superblock + SuperBlock(len)
+uint8_t buf8;
+uint32_t buf32;
+uint16_t buf16;
+
+/*  Globals Filesystem Values     */
+  int blockSize;// block size (in bytes, decimal)
+  int blocksPerGroup;// blocks per group (decimal)
+  int inodesPerGroup;// i-nodes per group (decimal)
+  int numBmap;   // block number of free block bitmap for this group (decimal)
+  int numImap;   // block number of free i-node bitmap for this group (decimal)
+
 
 void superblock_summary(){
 
- //The superblock is always located at byte offset 1024 from the beginning of the file                                                                                                                      
- int offset = 1024;
-
  int totBlocks;// total number of blocks (decimal)                                                                                                                                                          
  int totInodes;// total number of i-nodes (decimal)                                                                                                                                                         
- int blockSize;// block size (in bytes, decimal)                                                                                                                                                            
  int inodeSize;// i-node size (in bytes, decimal)                                                                                                                                                           
- int blocksPerGroup;// blocks per group (decimal)                                                                                                                                                           
- int inodesPerGroup;// i-nodes per group (decimal)                                                                                                                                                          
- int non; // first non-reserved i-node (decimal)                                                                                                                                                            
-
-  uint32_t buf;
-  uint16_t buf2; // for inodeSize                                                                                                                                                                           
+ int non; // first non-reserved i-node (decimal)                                                                                                                                                              
 
   // total number of blocks (decimal)                                                                                                                                                                       
- pread(image, &buf, 4, offset + 4);
- totBlocks = buf;
+ pread(image, &buf32, 4, superblockOffset + 4);
+ totBlocks = buf32;
 
  // total number of i-nodes (decimal)                                                                                                                                                                       
- pread(image, &buf, 4, offset + 0);
- totInodes = buf;
+ pread(image, &buf32, 4, superblockOffset + 0);
+ totInodes = buf32;
 
  // block size (in bytes, decimal)                                                                                                                                                                          
- pread(image, &buf, 4, offset + 24);
- blockSize = 1024 << buf;
+ pread(image, &buf32, 4, superblockOffset + 24);
+ blockSize = 1024 << buf32;
 
  // i-node size (in bytes, decimal)                                                                                                                                                                         
- pread(image, &buf2, 2, offset + 88);
- inodeSize = buf2;
+ pread(image, &buf16, 2, superblockOffset + 88);
+ inodeSize = buf16;
 
  // blocks per group (decimal)                                                                                                                                                                              
- pread(image, &buf, 4, offset + 32);
- blocksPerGroup = buf;
+ pread(image, &buf32, 4, superblockOffset + 32);
+ blocksPerGroup = buf32;
 
  // i-nodes per group (decimal)                                                                                                                                                                             
- pread(image, &buf, 4, offset + 40);
- inodesPerGroup = buf;
+ pread(image, &buf32, 4, superblockOffset + 40);
+ inodesPerGroup = buf32;
 
  // first non-reserved i-node (decimal)                                                                                                                                                                     
- pread(image, &buf, 4, offset + 84);
- non = buf;
+ pread(image, &buf32, 4, superblockOffset + 84);
+ non = buf32;
  // Print out for CSV                                                                                                                                                                                       
  fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d\n", "SUPERBLOCK", totBlocks, totInodes, blockSize, inodeSize,
          blocksPerGroup, inodesPerGroup, non);
 }
 
 void group_summary(){
-  int superblockOffset = 1024;
-  int groupOffset = superblockOffset + 1024; //Offset of Superblock + SuperBlock(len)
   
-  uint32_t buf;
-  uint16_t buf2; // for inodeSize                                                                                                                                                                           
-
   int groupNumber=0;   // group number (decimal, starting from zero)
   int blocksInGroup=0; // total number of blocks in this group (decimal)
   int inodesInGroup=0; // total number of i-nodes in this group (decimal)
   int numFreeBlocks=0; // number of free blocks (decimal)
   int numFreeInodes=0; // number of free i-nodes (decimal)
-  int numFreeBmap=0;   // block number of free block bitmap for this group (decimal)
-  int numFreeImap=0;   // block number of free i-node bitmap for this group (decimal)
   int numOfFirstBlock=0;   // block number of first block of i-nodes in this group (decimal)
 
 
   groupNumber = 0; //only single group in the file system, always 0th index group
 
-  pread(image, &buf, 4, superblockOffset + 4);
-  blocksInGroup = buf;
+  pread(image, &buf32, 4, superblockOffset + 4);
+  blocksInGroup = buf32;
   
-  pread(image, &buf, 4, superblockOffset + 40);
-  inodesInGroup = buf;
+  pread(image, &buf32, 4, superblockOffset + 40);
+  inodesInGroup = buf32;
   
-  pread(image, &buf2, 2, groupOffset + 12);
-  numFreeBlocks = buf2;
+  pread(image, &buf16, 2, groupOffset + 12);
+  numFreeBlocks = buf16;
   
-  pread(image, &buf2, 2, groupOffset + 14);
-  numFreeInodes = buf2;
+  pread(image, &buf16, 2, groupOffset + 14);
+  numFreeInodes = buf16;
   
-   pread(image, &buf, 4, groupOffset);
-   numFreeBmap = buf;
+  pread(image, &buf32, 4, groupOffset);
+  numBmap = buf32;
   
-  pread(image, &buf, 4, groupOffset + 4);
-  numFreeImap = buf;
+  pread(image, &buf32, 4, groupOffset + 4);
+  numImap = buf32;
 
-  pread(image, &buf, 4, groupOffset + 8);
-  numOfFirstBlock = buf;
+  pread(image, &buf32, 4, groupOffset + 8);
+  numOfFirstBlock = buf32;
   
   fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","GROUP",groupNumber,blocksInGroup,inodesInGroup,numFreeBlocks,
-          numFreeInodes,numFreeBmap,numFreeImap,numOfFirstBlock);
+          numFreeInodes,numBmap,numImap,numOfFirstBlock);
 }
 
 void freeblock_summary(){
+
 }
 
 void freeinode_summary(){
+
 }
 
 void inode_summary(){
@@ -172,11 +173,11 @@ int main (int argc, char *argv[]) {
 superblock_summary();
 
 group_summary();
-/*
+
 freeblock_summary();
 
 freeinode_summary();
-
+/*
 inode_summary();
 
 directory_entry();
