@@ -11,6 +11,7 @@
 
 const int SUCCESS=0,BADARGMTS=1,ERROR=2;
 int image = -1; //Image file descriptor, initially invalid
+int numGroups=1; //Only one single group in the file system
 
 void superblock_summary(){
 
@@ -61,26 +62,47 @@ void superblock_summary(){
 }
 
 void group_summary(){
-  //Scan each of the groups in the file system. For each group, produce a new-line terminated line for each group, 
-  //each comprised of nine comma-separated fields (with no white space), summarizing its contents.
+  int superblockOffset = 1024;
+  int groupOffset = superblockOffset + 1024; //Offset of Superblock + SuperBlock(len)
+  
+  uint32_t buf;
+  uint16_t buf2; // for inodeSize                                                                                                                                                                           
 
-  int groupNumber;// group number (decimal, starting from zero)
-  int blocksInGroup; // total number of blocks in this group (decimal)
-  int inodesInGroup;// total number of i-nodes in this group (decimal)
-  int numFreeBlocks;// number of free blocks (decimal)
-  int numFreeInodes;// number of free i-nodes (decimal)
-  int numFreeBmap;// block number of free block bitmap for this group (decimal)
-  int numFreeImap// block number of free i-node bitmap for this group (decimal)
-  int numOfFirstBlock// block number of first block of i-nodes in this group (decimal)
-  // Note that most Berkeley-derived file systms (like EXT2) support both blocks and fragments, which may have different sizes. The block is the preferred unit of allocation. But in some cases, fragments may be used (to reduce internal fragmentation loss). Block addresses and the free block list entries are based on the fragment size, rather than the block size. But, in the images we give you, the block and fragment sizes will be the same.
+  int groupNumber=0;   // group number (decimal, starting from zero)
+  int blocksInGroup=0; // total number of blocks in this group (decimal)
+  int inodesInGroup=0; // total number of i-nodes in this group (decimal)
+  int numFreeBlocks=0; // number of free blocks (decimal)
+  int numFreeInodes=0; // number of free i-nodes (decimal)
+  int numFreeBmap=0;   // block number of free block bitmap for this group (decimal)
+  int numFreeImap=0;   // block number of free i-node bitmap for this group (decimal)
+  int numOfFirstBlock=0;   // block number of first block of i-nodes in this group (decimal)
 
-// One of the major features included EXT2 file systems is support for multiple cylinder groups:
 
-// all cylinder groups but the last have the same number of blocks and I-nodes; the last has the residue (e.g. blocks/fs modulo blocks/group).
-// each group, in addition to its group summary, also (for redundancy) starts with a copy of the file system superblock.
-// But, in the images we give you, there will be only a single group
+  groupNumber = 0; //only single group in the file system, always 0th index group
+
+  pread(image, &buf, 4, superblockOffset + 4);
+  blocksInGroup = buf;
+  
+  pread(image, &buf, 4, superblockOffset + 40);
+  inodesInGroup = buf;
+  
+  pread(image, &buf2, 2, groupOffset + 12);
+  numFreeBlocks = buf2;
+  
+  pread(image, &buf2, 2, groupOffset + 14);
+  numFreeInodes = buf2;
+  
+   pread(image, &buf, 4, groupOffset);
+   numFreeBmap = buf;
+  
+  pread(image, &buf, 4, groupOffset + 4);
+  numFreeImap = buf;
+
+  pread(image, &buf, 4, groupOffset + 8);
+  numOfFirstBlock = buf;
+  
   fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","GROUP",groupNumber,blocksInGroup,inodesInGroup,numFreeBlocks,
-      numFreeInodes,numFreeBmap,numFreeImap);
+          numFreeInodes,numFreeBmap,numFreeImap,numOfFirstBlock);
 }
 
 void freeblock_summary(){
@@ -148,9 +170,9 @@ int main (int argc, char *argv[]) {
 
 
 superblock_summary();
-/*
-group_summary();
 
+group_summary();
+/*
 freeblock_summary();
 
 freeinode_summary();
