@@ -189,7 +189,7 @@ void inode_summary(){
 
       time_t     ctime,atime,mtime;
       struct tm  *cts,*ats,*mts;
-      char       cbuf[200],abuf[200],mbuf[200];
+      char       cbuf[80],abuf[80],mbuf[80];
 
       pread(image, &buf32, 4, offset + 12);
       ctime = buf32;
