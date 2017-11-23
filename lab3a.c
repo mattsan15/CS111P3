@@ -224,22 +224,63 @@ void inode_summary(){
               cbuf,mbuf,abuf,fileSize,numBlocks,blockAddress[0],blockAddress[1],blockAddress[2],blockAddress[3],blockAddress[4],
               blockAddress[5],blockAddress[6],blockAddress[7],blockAddress[8],blockAddress[9],blockAddress[10],blockAddress[11],
               blockAddress[12],blockAddress[13],blockAddress[14]);
+
+      if (fileType == 'd'){
+	
+	int logicalByteOffset = 0;
+	int inodeNumOfRefFile;
+	int entryLen;
+	int nameLen;
+
+	// 12 direct blocks
+	for (int k = 0; k < 12; k++) {
+	  int dataBlockNum = blockAddress[k];
+	  // Make sure that the data block address is valid (not zero)
+	  if (dataBlockNum != 0) {
+	    // The current data block offset will be at the dataBlockNum times the size of a block in the file system.
+	    int currOffset = blockSize * dataBlockNum;
+	    // Go through the loop until we reach the end of the block.
+	    while (currOffset < (blockSize * dataBlockNum) + blockSize) {
+
+	      // Get the inode number of the referenced file.
+	      pread(image, &buf32, 4, currOffset);
+              inodeNumOfRefFile = buf32;
+
+	      // Get the entry length.
+	      pread(image, &buf16, 2, currOffset + 4);
+              entryLen = buf16;
+
+	      // Get the name length.
+	      pread(image, &buf8, 1, currOffset + 6);
+	      nameLen = buf8;
+
+	      // If the I-node number is 0, then it is not valid, we do not print anything
+	      // and we restart the loop, moving the current offset to the next entry length.
+	      if (inodeNumOfRefFile == 0) {
+		currOffset = currOffset + entryLen;
+		continue;
+	      }
+
+	      // Get the name of the file/directory
+	      char name[100] = {0};
+	      char bufForName;
+	      for (int l = 0; l < nameLen; l++) {
+		pread(image, &bufForName, 1, currOffset + 8 + l);
+		name[l] = bufForName;
+	      }
+
+	      fprintf(stdout, "%s,%d,%d,%d,%d,%d,'%s'\n", "DIRENT", (i+1), logicalByteOffset, inodeNumOfRefFile, entryLen, nameLen, name);
+	      // Move both the current offset and the logical byte offset by the entry length.
+	      // The difference between the two is that the logical byte offset is equal to 0
+	      // when currOffset is equal to blockSize * dataBlockNum.
+	      currOffset = currOffset + entryLen;
+	      logicalByteOffset = logicalByteOffset + entryLen;
+	    }
+	  }
+	}
+      }
     }
   }
-}
-
-void directory_entry(){
-  /*
-  For each directory I-node, scan every data block. For each valid (non-zero I-node number) directory entry, produce a new-line terminated line, with seven comma-separated fields (no white space).
-
-  DIRENT
-  parent inode number (decimal) ... the I-node number of the directory that contains this entry
-  logical byte offset (decimal) of this entry within the directory
-  inode number of the referenced file (decimal)
-  entry length (decimal)
-  name length (decimal)
-  name (string, surrounded by single-quotes). Don't worry about escaping, we promise there will be no single-quotes or commas in any of the file names.
-  */  
 }
 
 void indirectblock_references(){
@@ -292,7 +333,6 @@ freeinode_summary();
 
 inode_summary();
 /*
-directory_entry();
 
 indirectblock_references();
 */
