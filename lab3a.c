@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>
 
 const int SUCCESS=0,BADARGMTS=1,ERROR=2;
 int image = -1; //Image file descriptor, initially invalid
@@ -21,18 +22,18 @@ uint32_t buf32;
 uint16_t buf16;
 
 /*  Globals Filesystem Values     */
-  int blockSize;// block size (in bytes, decimal)
-  int blocksPerGroup;// blocks per group (decimal)
-  int inodesPerGroup;// i-nodes per group (decimal)
-  int numBmap;   // block number of free block bitmap for this group (decimal)
-  int numImap;   // block number of free i-node bitmap for this group (decimal)
-
+int blockSize;// block size (in bytes, decimal)
+int blocksPerGroup;// blocks per group (decimal)
+int inodesPerGroup;// i-nodes per group (decimal)
+int numBmap;   // block number of free block bitmap for this group (decimal)
+int numImap;   // block number of free i-node bitmap for this group (decimal)
+int inodeTable;   // block number of first block of i-nodes in this group (decimal)
+int inodeSize;// i-node size (in bytes, decimal)
 
 void superblock_summary(){
 
  int totBlocks;// total number of blocks (decimal)                                                                                                                                                          
- int totInodes;// total number of i-nodes (decimal)                                                                                                                                                         
- int inodeSize;// i-node size (in bytes, decimal)                                                                                                                                                           
+ int totInodes;// total number of i-nodes (decimal)                                                                                                                                                           
  int non; // first non-reserved i-node (decimal)                                                                                                                                                              
 
   // total number of blocks (decimal)                                                                                                                                                                       
@@ -71,11 +72,9 @@ void group_summary(){
   
   int groupNumber=0;   // group number (decimal, starting from zero)
   int blocksInGroup=0; // total number of blocks in this group (decimal)
-  int inodesInGroup=0; // total number of i-nodes in this group (decimal)
+  int inodesInGroup=inodesPerGroup; // total number of i-nodes in this group (decimal)
   int numFreeBlocks=0; // number of free blocks (decimal)
   int numFreeInodes=0; // number of free i-nodes (decimal)
-  int numOfFirstBlock=0;   // block number of first block of i-nodes in this group (decimal)
-
 
   groupNumber = 0; //only single group in the file system, always 0th index group
 
@@ -95,26 +94,26 @@ void group_summary(){
   numImap = buf32;
 
   pread(image, &buf32, 4, groupOffset + 8);
-  numOfFirstBlock = buf32;
+  inodeTable = buf32;
   
-  fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","GROUP",groupNumber,blocksInGroup,inodesPerGroup,numFreeBlocks,
-          numFreeInodes,numBmap,numImap,numOfFirstBlock);
+  fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","GROUP",groupNumber,blocksInGroup,inodesInGroup,numFreeBlocks,
+          numFreeInodes,numBmap,numImap,inodeTable);
 }
 
 void freeblock_summary(){
   // Go through the block bitmap byte by byte                                                                                                                                                               
   for(int i = 0; i < blockSize; i++){
-    // Get the byte                                                                                                                                                                                       
+    // Get the byte
     pread(image, &buf8, 1, (numBmap * blockSize) + i);
     int8_t getBit = 1;
-    // Go through the byte bit by bit                                                                                                                                                                     
+    // Go through the byte bit by bit
     for(int j = 1; j <= 8; j++){
       // See if the bit is set.                                                                                                                                                                         
       int checkAllocation = buf8 & getBit;
       // If it's not, then it's free and print it out.                                                                                                                                                  
       if (checkAllocation == 0)
         fprintf(stdout, "%s,%d\n", "BFREE", i * 8 + j);
-      // Move on to the next bit.                                                                                                                                                                       
+      // Move on to the next bit.
       getBit = getBit << 1;
     }
   }
@@ -140,28 +139,93 @@ void freeinode_summary(){
 }
 
 void inode_summary(){
-
-  /*
-  //Scan the I-nodes for each group. For each allocated (non-zero mode and non-zero link count) I-node, 
-  produce a new-line terminated line, with 27 comma-separated fields (with no white space). The first twelve fields are
-  i-node attributes:
-
-  int numInode; //inode number (decimal)
-  char fileType; //file type ('f' for file, 'd' for directory, 's' for symbolic link, '?" for anything else)
-  mode (low order 12-bits, octal ... suggested format "0%o")
-  owner (decimal)
-  group (decimal)
-  link count (decimal)
-  time of last I-node change (mm/dd/yy hh:mm:ss, GMT)
-  modification time (mm/dd/yy hh:mm:ss, GMT)
-  time of last access (mm/dd/yy hh:mm:ss, GMT)
-  file size (decimal)
-  number of blocks (decimal)
+  int inodeTableOffset = (inodeTable*blockSize);
   
-  The next fifteen fields are block addresses (decimal, 12 direct, one indirect, one double indirect, one triple indirect).
-  */
-  //fprintf(stdout, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n","INODE",groupNumber,blocksInGroup,inodesPerGroup,numFreeBlocks,
-  //        numFreeInodes,numBmap,numImap,numOfFirstBlock);
+  //for each Inode structure in the Inode table
+  for (int i = 0; i <= inodesPerGroup; ++i) { 
+    //Offset of the beggining of the Inode structure
+    int offset = inodeTableOffset + (inodeSize*i);
+    
+    int link_count;
+    pread(image, &buf16, 2, offset + 26);
+    link_count = buf16;
+    
+    int mode;
+    pread(image, &buf16, 2, offset);
+    mode = buf16;
+    
+    //Validate Inode structure
+    if (mode!=0 && link_count!=0) {
+
+      int owner;
+      pread(image, &buf16, 2, offset + 2);
+      owner = buf16;
+      
+      int group;
+      pread(image, &buf16, 2, offset + 24);
+      group = buf16;
+      
+      char fileType;
+      int file = mode & 0xF000;
+      switch (file){
+        case 0x8000:
+          fileType='f';
+          break;
+        case 0x4000:
+          fileType='d';
+          break;
+        case 0xA000:
+        fileType='s';
+        break;
+        default:
+        fileType='?';
+        break;
+      }
+
+      //time of last I-node change
+      //modification time
+      //time of last access
+      //(mm/dd/yy hh:mm:ss, GMT)
+
+      time_t     ctime,atime,mtime;
+      struct tm  *cts,*ats,*mts;
+      char       cbuf[200],abuf[200],mbuf[200];
+
+      pread(image, &buf32, 4, offset + 12);
+      ctime = buf32;
+      cts = localtime(&ctime);
+      strftime(cbuf,sizeof(cbuf),"%D %H:%M:%S",cts);
+      
+      pread(image, &buf32, 4, offset + 16);
+      mtime = buf32;
+      mts = localtime(&mtime);
+      strftime(mbuf,sizeof(mbuf),"%D %H:%M:%S",mts);
+
+      pread(image, &buf32, 4, offset + 8);
+      atime = buf32;
+      ats = localtime(&atime);
+      strftime(abuf,sizeof(abuf),"%D %H:%M:%S",ats);
+
+      int numBlocks;
+      pread(image, &buf32, 4, offset + 28);
+      numBlocks = buf32;
+
+      int fileSize;
+      pread(image, &buf32, 4, offset + 4);
+      fileSize = buf32;
+
+      uint32_t blockAddress[15];
+      for (int i = 0,j=0; i < 60; i+=4,j++) {
+        pread(image, &buf32, 4, offset + 40 + i);
+        blockAddress[j] = buf32;
+      }
+
+      fprintf(stdout, "%s,%d,%c,0%o,%d,%d,%d,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n","INODE",(i+1),fileType,mode,owner,group,link_count,
+              cbuf,mbuf,abuf,fileSize,numBlocks,blockAddress[0],blockAddress[1],blockAddress[2],blockAddress[3],blockAddress[4],
+              blockAddress[5],blockAddress[6],blockAddress[7],blockAddress[8],blockAddress[9],blockAddress[10],blockAddress[11],
+              blockAddress[12],blockAddress[13],blockAddress[14]);
+    }
+  }
 }
 
 void directory_entry(){
