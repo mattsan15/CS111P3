@@ -142,7 +142,7 @@ void inode_summary(){
   int inodeTableOffset = (inodeTable*blockSize);
   
   //for each Inode structure in the Inode table
-  for (int i = 0; i <= inodesPerGroup; ++i) { 
+  for (int i = 0; i <= inodesPerGroup; ++i) {
     //Offset of the beggining of the Inode structure
     int offset = inodeTableOffset + (inodeSize*i);
     
@@ -182,28 +182,26 @@ void inode_summary(){
         break;
       }
 
-      //time of last I-node change
-      //modification time
-      //time of last access
-      //(mm/dd/yy hh:mm:ss, GMT)
-
       time_t     ctime,atime,mtime;
       struct tm  *cts,*ats,*mts;
       char       cbuf[80],abuf[80],mbuf[80];
 
+      //time of last I-node change
       pread(image, &buf32, 4, offset + 12);
       ctime = buf32;
-      cts = localtime(&ctime);
+      cts = gmtime(&ctime);
       strftime(cbuf,sizeof(cbuf),"%D %H:%M:%S",cts);
-      
+
+      //modification time      
       pread(image, &buf32, 4, offset + 16);
       mtime = buf32;
-      mts = localtime(&mtime);
+      mts = gmtime(&mtime);
       strftime(mbuf,sizeof(mbuf),"%D %H:%M:%S",mts);
 
+      //time of last access
       pread(image, &buf32, 4, offset + 8);
       atime = buf32;
-      ats = localtime(&atime);
+      ats = gmtime(&atime);
       strftime(abuf,sizeof(abuf),"%D %H:%M:%S",ats);
 
       int numBlocks;
@@ -220,96 +218,169 @@ void inode_summary(){
         blockAddress[j] = buf32;
       }
 
-      fprintf(stdout, "%s,%d,%c,0%o,%d,%d,%d,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n","INODE",(i+1),fileType,mode,owner,group,link_count,
+      mode = mode & 0x0FFF;
+
+      fprintf(stdout, "%s,%d,%c,%o,%d,%d,%d,%s,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n","INODE",(i+1),fileType,mode,owner,group,link_count,
               cbuf,mbuf,abuf,fileSize,numBlocks,blockAddress[0],blockAddress[1],blockAddress[2],blockAddress[3],blockAddress[4],
               blockAddress[5],blockAddress[6],blockAddress[7],blockAddress[8],blockAddress[9],blockAddress[10],blockAddress[11],
               blockAddress[12],blockAddress[13],blockAddress[14]);
 
       if (fileType == 'd'){
-	
-	int logicalByteOffset = 0;
-	int inodeNumOfRefFile;
-	int entryLen;
-	int nameLen;
+	     int logicalByteOffset = 0;
+	     int inodeNumOfRefFile;
+       int entryLen;
+       int nameLen;
 
-	// 12 direct blocks
-	for (int k = 0; k < 12; k++) {
-	  int dataBlockNum = blockAddress[k];
-	  // Make sure that the data block address is valid (not zero)
-	  if (dataBlockNum != 0) {
-	    // The current data block offset will be at the dataBlockNum times the size of a block in the file system.
-	    int currOffset = blockSize * dataBlockNum;
-	    // Go through the loop until we reach the end of the block.
-	    while (currOffset < (blockSize * dataBlockNum) + blockSize) {
+	     // 12 direct blocks
+    	 for (int k = 0; k < 12; k++) {
+	       int dataBlockNum = blockAddress[k];
+	       // Make sure that the data block address is valid (not zero)
+	       if (dataBlockNum != 0) {
+	         // The current data block offset will be at the dataBlockNum times the size of a block in the file system.
+	         int currOffset = blockSize * dataBlockNum;
+	         // Go through the loop until we reach the end of the block.
+	         while (currOffset < (blockSize * dataBlockNum) + blockSize) {
+	           // Get the inode number of the referenced file.
+	           pread(image, &buf32, 4, currOffset);
+             inodeNumOfRefFile = buf32;
 
-	      // Get the inode number of the referenced file.
-	      pread(image, &buf32, 4, currOffset);
-              inodeNumOfRefFile = buf32;
+    	       // Get the entry length.
+	           pread(image, &buf16, 2, currOffset + 4);
+             entryLen = buf16;
 
-	      // Get the entry length.
-	      pread(image, &buf16, 2, currOffset + 4);
-              entryLen = buf16;
+	           // Get the name length.
+	           pread(image, &buf8, 1, currOffset + 6);
+	           nameLen = buf8;
 
-	      // Get the name length.
-	      pread(image, &buf8, 1, currOffset + 6);
-	      nameLen = buf8;
+	           // If the I-node number is 0, then it is not valid, we do not print anything
+	           // and we restart the loop, moving the current offset to the next entry length.
+	           if (inodeNumOfRefFile == 0) {
+		          currOffset = currOffset + entryLen;
+		          continue;
+	           }
 
-	      // If the I-node number is 0, then it is not valid, we do not print anything
-	      // and we restart the loop, moving the current offset to the next entry length.
-	      if (inodeNumOfRefFile == 0) {
-		currOffset = currOffset + entryLen;
-		continue;
-	      }
+	           // Get the name of the file/directory
+	           char name[100] = {0};
+	           char bufForName;
+	           for (int l = 0; l < nameLen; l++) {
+		          pread(image, &bufForName, 1, currOffset + 8 + l);
+		          name[l] = bufForName;
+	           }
 
-	      // Get the name of the file/directory
-	      char name[100] = {0};
-	      char bufForName;
-	      for (int l = 0; l < nameLen; l++) {
-		pread(image, &bufForName, 1, currOffset + 8 + l);
-		name[l] = bufForName;
-	      }
-
-	      fprintf(stdout, "%s,%d,%d,%d,%d,%d,'%s'\n", "DIRENT", (i+1), logicalByteOffset, inodeNumOfRefFile, entryLen, nameLen, name);
-	      // Move both the current offset and the logical byte offset by the entry length.
-	      // The difference between the two is that the logical byte offset is equal to 0
-	      // when currOffset is equal to blockSize * dataBlockNum.
-	      currOffset = currOffset + entryLen;
-	      logicalByteOffset = logicalByteOffset + entryLen;
-	    }
-	  }
-	}
+	           fprintf(stdout, "%s,%d,%d,%d,%d,%d,'%s'\n", "DIRENT", (i+1), logicalByteOffset, inodeNumOfRefFile, entryLen, nameLen, name);
+	           // Move both the current offset and the logical byte offset by the entry length.
+	           // The difference between the two is that the logical byte offset is equal to 0
+	           // when currOffset is equal to blockSize * dataBlockNum.
+	           currOffset = currOffset + entryLen;
+	           logicalByteOffset = logicalByteOffset + entryLen;
+	         }
+	       }
+	     }
       }
     }
   }
 }
 
+// void process_indirect_block(){  /*    For each non-zero block pointer you find, produce a new-line terminated line with six comma-separated fields (no white space).
+
+//   INDIRECT
+//   I-node number of the owning file (decimal)
+//   (decimal) level of indirection for the block being scanned ... 1 single indirect, 2 double indirect, 3 triple
+//   logical block offset (decimal) represented by the referenced block. If the referenced block is a data block, this is the logical block offset of that block within the file. If the referenced block is a single- or double-indirect block, this is the same as the logical offset of the first data block to which it refers.
+//   block number of the (1,2,3) indirect block being scanned (decimal) ... not the highest level block (in the recursive scan), but the lower level block that contains the block reference reported by this entry.
+//   block number of the referenced block (decimal)
+//   Logical block is a commonly used term. It ignores physical file structure (where data is actulally stored, indirect blocks, sparseness, etc) and views the data in the file as a (logical) stream of bytes. If the block size was 1K (1024 bytes):
+
+//   bytes 0-1023 would be in logical block 0
+//   bytes 1024-2047 would be in logical block 1
+//   bytes 2048-3071 would be in logical block 2
+//   ...
+//   If an I-node contains a triple indirect block:
+
+//   the triple indirect block number would be included in the INODE summary.
+//   INDIRECT entries (with level 3) would be produced for each double indirect block pointed to by that triple indirect block.
+//   INDIRECT entries (with level 2) would be produced for each indirect block pointed to by one of those double indirect blocks.
+//   INDIRECT entries (with level 1) would be produced for each data block pointed to by one of those indirect blocks.
+//   */  
+// }
+
 void indirectblock_references(){
-  /*The I-node summary contains a list of all 12 blocks, and the primary single, double, and triple indirect blocks.
-    We also need to know about the blocks that are pointed to by those indirect blocks. For each file or directory I-node, scan the single indirect blocks and (recursively) the double and triple indirect blocks.
-    For each non-zero block pointer you find, produce a new-line terminated line with six comma-separated fields (no white space).
+  
+  int inodeTableOffset = (inodeTable*blockSize);
+  
+  //for each Inode structure in the Inode table
+  for (int i = 0; i <= inodesPerGroup; ++i) { 
+    //Offset of the beggining of the Inode structure
+    int offset = inodeTableOffset + (inodeSize*i);
+        
+    int mode;
+    pread(image, &buf16, 2, offset);
+    mode = buf16;
+    
+    //Validate Inode structure
+    if (mode!=0) {
 
-  INDIRECT
-  I-node number of the owning file (decimal)
-  (decimal) level of indirection for the block being scanned ... 1 single indirect, 2 double indirect, 3 triple
-  logical block offset (decimal) represented by the referenced block. If the referenced block is a data block, this is the logical block offset of that block within the file. If the referenced block is a single- or double-indirect block, this is the same as the logical offset of the first data block to which it refers.
-  block number of the (1,2,3) indirect block being scanned (decimal) ... not the highest level block (in the recursive scan), but the lower level block that contains the block reference reported by this entry.
-  block number of the referenced block (decimal)
-  Logical block is a commonly used term. It ignores physical file structure (where data is actulally stored, indirect blocks, sparseness, etc) and views the data in the file as a (logical) stream of bytes. If the block size was 1K (1024 bytes):
+      char fileType;
+      int file = mode & 0xF000;
+      switch (file){
+        case 0x8000:
+          fileType='f';
+          break;
+        case 0x4000:
+          fileType='d';
+          break;
+        case 0xA000:
+        fileType='s';
+        break;
+        default:
+        fileType='?';
+        break;
+      }
 
-  bytes 0-1023 would be in logical block 0
-  bytes 1024-2047 would be in logical block 1
-  bytes 2048-3071 would be in logical block 2
-  ...
-  You can confirm your understanding of logical block numbers by looking at the INDIRECT entries in the sample output.
-  If an I-node contains a triple indirect block:
+      uint32_t** singleIndirect;
+      uint32_t*** doubleIndirect;
+      uint32_t**** tripleIndirect;
+      //Only get the indirect block pointers
+      for (int k = 48,j=0; k < 60; k+=4,j++) {
+        pread(image, &buf32, 4, offset + 40 + k);
+        if (j==0){singleIndirect = (uint32_t**)buf32;}
+        else if (j==1){doubleIndirect = (uint32_t***)buf32;}
+        else if (j==2){tripleIndirect = (uint32_t****)buf32;}
+      }
 
-  the triple indirect block number would be included in the INODE summary.
-  INDIRECT entries (with level 3) would be produced for each double indirect block pointed to by that triple indirect block.
-  INDIRECT entries (with level 2) would be produced for each indirect block pointed to by one of those double indirect blocks.
-  INDIRECT entries (with level 1) would be produced for each data block pointed to by one of those indirect blocks.
-  */  
+      if (fileType == 'd' || fileType == 'f'){
+       int logicalByteOffset = 0;
+       int inodeNumOfRefFile;
+       int entryLen;
+
+        //pointer to a table of pointers to data blocks
+        //pointer to a table of pointers that point to a table of pointers to data blocks
+
+       // 3 indirect blocks (single,double,triple)
+       if (*singleIndirect != 0){ // Make sure that the data block address is valid (not zero)
+          uint32_t *dataPtrs = *singleIndirect;
+          uint32_t firstDataBlock = dataPtrs[0]; 
+          fprintf(stdout, "%s,%d,%d,%d\n","INDIRECT",(i+1),1,firstDataBlock);
+       }
+
+       if (*doubleIndirect != 0) { // Make sure that the data block address is valid (not zero)
+          uint32_t **singlePtrs = *doubleIndirect;
+          uint32_t *dataPtrs = *singlePtrs;
+          uint32_t firstDataBlock = dataPtrs[0]; 
+          fprintf(stdout, "%s,%d,%d,%d\n","INDIRECT",(i+1),1,firstDataBlock);
+       }
+
+       if (*tripleIndirect != 0) { // Make sure that the data block address is valid (not zero)
+          uint32_t ***doublePtrs = *doubleIndirect;
+          uint32_t **singlePtrs = *doublePtrs;
+          uint32_t *dataPtrs = *singlePtrs;
+          uint32_t firstDataBlock = dataPtrs[0]; 
+          fprintf(stdout, "%s,%d,%d,%d\n","INDIRECT",(i+1),1,firstDataBlock);
+       }
+      }
+    }
+  }
 }
-
 
 int main (int argc, char *argv[]) {
   if (argc != 2) { //Single image file arguement
@@ -323,18 +394,17 @@ int main (int argc, char *argv[]) {
     exit(BADARGMTS);
   }
 
-superblock_summary();
+  superblock_summary();
 
-group_summary();
+  group_summary();
 
-freeblock_summary();
+  freeblock_summary();
 
-freeinode_summary();
+  freeinode_summary();
 
-inode_summary();
-/*
+  inode_summary();
 
-indirectblock_references();
-*/
-return(SUCCESS);
+  indirectblock_references();
+
+  return(SUCCESS);
 }
