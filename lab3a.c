@@ -242,11 +242,11 @@ void inode_summary(){
 	         while (currOffset < (blockSize * dataBlockNum) + blockSize) {
 	           // Get the inode number of the referenced file.
 	           pread(image, &buf32, 4, currOffset);
-             inodeNumOfRefFile = buf32;
+                   inodeNumOfRefFile = buf32;
 
-    	       // Get the entry length.
+    	           // Get the entry length.
 	           pread(image, &buf16, 2, currOffset + 4);
-             entryLen = buf16;
+                   entryLen = buf16;
 
 	           // Get the name length.
 	           pread(image, &buf8, 1, currOffset + 6);
@@ -277,6 +277,99 @@ void inode_summary(){
 	       }
 	     }
       }
+      
+      int logicalBlockOffset = 0;
+
+      // Single indirect block is valid
+      if (blockAddress[12] != 0) {
+	// Beginning offset
+	logicalBlockOffset = 12;
+	// Get the indirect block being scanned.
+        int indirectBlockNum = blockAddress[12];
+	// Go through the indirect block, for every 4 bytes
+	for(int k = 0; k < blockSize; k += 4){
+	  // Get the inner data block number
+	  pread(image, &buf32, 4, (indirectBlockNum * blockSize) + k);
+	  int innerDataBlockNum = buf32;
+	  // If the inner data block number is valid (not zero)
+	  if(innerDataBlockNum != 0){
+	    fprintf(stdout, "%s,%d,%d,%d,%d,%d\n","INDIRECT",(i+1), 1, logicalBlockOffset, indirectBlockNum, innerDataBlockNum);
+	  }
+	  // Increase the logical block offset by 1.
+	  logicalBlockOffset++;
+	}
+      }
+      
+      // Double indirect block is valid
+      if (blockAddress[13] != 0) {
+	// Get the indirect block being scanned.
+        int indirectBlockNum = blockAddress[13];
+	 // Go through the indirect block, for every 4 bytes
+        for(int k = 0; k < blockSize; k += 4){
+	  // Get the inner indirect block
+          pread(image, &buf32, 4, (indirectBlockNum * blockSize) + k);
+          int innerIndirectBlockNum = buf32;
+	  // If the inner indirect block number is valid (not zero)
+          if(innerIndirectBlockNum != 0){
+            fprintf(stdout, "%s,%d,%d,%d,%d,%d\n","INDIRECT",(i+1), 2, logicalBlockOffset, indirectBlockNum, innerIndirectBlockNum);
+	    // Go through the inner indirect block, for every 4 bytes
+            for (int l = 0; l < blockSize; l += 4){
+	      // Get the inner data block number
+              pread(image, &buf32, 4, (innerIndirectBlockNum * blockSize) + l);
+              int innerDataBlockNum = buf32;
+	      // If the inner data block number is valid (not zero)
+              if (innerDataBlockNum != 0){
+                fprintf(stdout, "%s,%d,%d,%d,%d,%d\n","INDIRECT",(i+1), 1, logicalBlockOffset, innerIndirectBlockNum, innerDataBlockNum);
+              }
+	      // Increase the logical block offset by 1.
+	      logicalBlockOffset++;
+            }
+          }
+	  // Increase the logical block offset by 255.
+	  logicalBlockOffset += 255;
+        }
+      }
+      
+      // Triple indirect block is valid
+      if (blockAddress[14] != 0) {
+	// Get the indirect block being scanned.
+        int indirectBlockNum = blockAddress[14];
+	// Go through the indirect block, for every 4 bytes
+        for(int k = 0; k < blockSize; k += 4){
+	  // Get the inner indirect block
+          pread(image, &buf32, 4, (indirectBlockNum * blockSize) + k);
+          int innerIndirectBlockNum = buf32;
+	  // If the inner data block number is valid (not zero) 
+          if(innerIndirectBlockNum != 0){
+            fprintf(stdout, "%s,%d,%d,%d,%d,%d\n","INDIRECT",(i+1), 3, logicalBlockOffset, indirectBlockNum, innerIndirectBlockNum);
+	    // Go through the inner indirect block, for every 4 bytes
+            for (int l = 0; l < blockSize; l += 4){
+	      // Get the 2nd inner indirect block
+              pread(image, &buf32, 4, (innerIndirectBlockNum * blockSize) + l);
+              int innerIndirectBlockNum2 = buf32;
+	      // If the 2nd inner data block number is valid (not zero)
+              if (innerIndirectBlockNum2 != 0){
+                fprintf(stdout, "%s,%d,%d,%d,%d,%d\n","INDIRECT",(i+1), 2, logicalBlockOffset, innerIndirectBlockNum, innerIndirectBlockNum2);
+		// Go through the 2nd inner indirect block, for every 4 bytes
+		for (int m = 0; m < blockSize; m += 4) {
+		  // Get the inner data block number
+                  pread(image, &buf32, 4, (innerIndirectBlockNum2 * blockSize) + m);
+                  int innerDataBlockNum = buf32;
+		  // If the inner data block number is valid (not zero)
+                  if (innerDataBlockNum != 0){
+                    fprintf(stdout, "%s,%d,%d,%d,%d,%d\n","INDIRECT",(i+1), 1, logicalBlockOffset, innerIndirectBlockNum2, innerDataBlockNum);
+                  }
+		  // Increase the logical block offset by 1.
+		  logicalBlockOffset++;
+                }
+              }
+	      // Increase the logical block offset by 255.
+	      logicalBlockOffset += 255;
+            }
+          }
+        }
+	
+      }
     }
   }
 }
@@ -303,7 +396,7 @@ void inode_summary(){
 //   INDIRECT entries (with level 1) would be produced for each data block pointed to by one of those indirect blocks.
 //   */  
 // }
-
+/*
 void indirectblock_references(){
   
   int inodeTableOffset = (inodeTable*blockSize);
@@ -381,7 +474,7 @@ void indirectblock_references(){
     }
   }
 }
-
+*/
 int main (int argc, char *argv[]) {
   if (argc != 2) { //Single image file arguement
     fprintf(stderr,"Incorrect number of Arguements!\nUsage: ./lab3 EXT2_test.img\n");
@@ -404,7 +497,7 @@ int main (int argc, char *argv[]) {
 
   inode_summary();
 
-  indirectblock_references();
+  //indirectblock_references();
 
   return(SUCCESS);
 }
