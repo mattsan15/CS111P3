@@ -366,6 +366,7 @@ void inode_summary(){
 	           logicalBlockOffset += 255;
             }
           }
+          logicalBlockOffset += 16777215;
         }	
       }
     }
