@@ -2,8 +2,16 @@ NAME: Edgar Lopez, Matthew Sanchez
 EMAIL: elopez42@g.ucla.edu, mattmattsan15@aol.com
 ID: 004639538, 204650577
 
-lab3a.c -
+lab3a.c - Source code for in depth data study and retrivial of a Second Extended File System image. Assumptions include a simple file system
+containing only a single group. Analysis of: Superblock, Group dir, block & inode bitmap,and inode table (including datablock anaysis
+through direct & indirect pointers) provided.
 
-Makefile - 
+Makefile - targets include 'make' to build exectuable accepting a single image file to be analyzed, 'dist' to build tarbell, 'clean' to remove exectuable and tarbell 
 
 README - Shown Here
+
+Additional Information
+-------------------------------------------------------------------------------
+Header file was causing multiple compiling inconvinences, so in our implementation of the source code we opted to use the
+http://www.nongnu.org/ext2-doc/ext2.html explanation of an EXT2 file system to extract byte offsets and did not incoorperate the
+header file in our solution.
